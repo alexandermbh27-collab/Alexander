@@ -32,6 +32,9 @@
     .legend { background:white; padding:9px 10px; border-radius:10px; box-shadow:0 2px 9px #0003; font-size:12px; line-height:1.55; }
     .legend i { display:inline-block; width:10px; height:10px; margin-right:5px; vertical-align:middle; border-radius:2px; }
     .leaflet-popup-content { font:14px system-ui,sans-serif; }
+    .territorio-etiqueta { background:transparent; border:0; }
+    .territorio-numero { color:#18233f; font:800 20px/1 system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:-.04em; text-align:center; text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff, 0 2px 3px #0005; pointer-events:none; }
+    .territorio-numero.cuadra { font-size:16px; letter-spacing:-.02em; }
     @media (min-width:700px) { #map { height:calc(100dvh - 113px); } .status { max-width:430px; } }
   </style>
 </head>
@@ -63,12 +66,13 @@
       maxZoom:19, attribution:'© OpenStreetMap contributors'
     }).addTo(mapa);
 
+    const etiquetas = L.layerGroup().addTo(mapa);
     const sectores = L.geoJSON(null, { style: estiloSector, onEachFeature: prepararSector }).addTo(mapa);
 
     const leyenda = L.control({ position:'topleft' });
     leyenda.onAdd = () => {
       const div = L.DomUtil.create('div','legend');
-      div.innerHTML = '<b>Capas</b><br><i style="background:#6d4f93"></i>Territorios y cuadras My Maps<br><i style="background:#1677ff;border-radius:50%"></i>Tu ubicación GPS';
+      div.innerHTML = '<b>Capas</b><br><i style="background:#6d4f93"></i>Territorios y cuadras My Maps<br><b>1</b> Número del territorio<br><i style="background:#1677ff;border-radius:50%"></i>Tu ubicación GPS';
       return div;
     };
     leyenda.addTo(mapa);
@@ -82,6 +86,10 @@
     const precision = document.getElementById('precision');
 
     function nombre(feature) { return feature.properties.name || feature.properties.Name || 'Territorio sin nombre'; }
+    function codigoTerritorio(feature) {
+      const coincidencia = nombre(feature).match(/Territorio\s+(\d+)(?:\s+Cuadra\s+([A-C]))?/i);
+      return coincidencia ? coincidencia[1] + (coincidencia[2] ? ' ' + coincidencia[2].toUpperCase() : '') : '';
+    }
     function estiloSector(feature) {
       const coincidencia = nombre(feature).match(/Territorio\s+(\d+)/i);
       const colores = ['#f4bf24','#ef7e3b','#56bddb','#8d62a9','#86c33c','#3554a4','#e765a5'];
@@ -92,6 +100,20 @@
       const etiqueta = nombre(feature);
       layer.bindTooltip(etiqueta, { sticky:true });
       layer.bindPopup('<b>' + etiqueta.replace(/</g,'&lt;') + '</b><br>Polígono importado del My Maps del territorio.');
+      const codigo = codigoTerritorio(feature);
+      if (codigo) {
+        const esCuadra = /\s[A-C]$/.test(codigo);
+        L.marker(layer.getBounds().getCenter(), {
+          interactive:false,
+          keyboard:false,
+          icon:L.divIcon({
+            className:'territorio-etiqueta',
+            html:'<div class="territorio-numero' + (esCuadra ? ' cuadra' : '') + '" aria-label="Territorio ' + codigo + '">' + codigo + '</div>',
+            iconSize:[48,28],
+            iconAnchor:[24,14]
+          })
+        }).addTo(etiquetas);
+      }
     }
     function puntoEnAnillo(lng, lat, anillo) {
       let dentro = false;
