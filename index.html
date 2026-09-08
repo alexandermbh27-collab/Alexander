@@ -88,11 +88,19 @@
     const precision = document.getElementById('precision');
 
     function nombre(feature) { return feature.properties.name || feature.properties.Name || 'Territorio sin nombre'; }
+    function detalleCuadra(feature) {
+      const coincidencia = nombre(feature).match(/^Territorio\s+(\d+)\s*[—-]\s*(\d+)-([A-Z])$/i);
+      return coincidencia ? { territorio:coincidencia[1], codigo:coincidencia[2] + '-' + coincidencia[3].toUpperCase(), letra:coincidencia[3].toUpperCase() } : null;
+    }
     function codigoTerritorio(feature) {
+      const cuadra = detalleCuadra(feature);
+      if (cuadra) return cuadra.codigo;
       const coincidencia = nombre(feature).match(/Territorio\s+(\d+)(?:\s+Cuadra\s+([A-C]))?/i);
       return coincidencia ? coincidencia[1] + (coincidencia[2] ? ' ' + coincidencia[2].toUpperCase() : '') : '';
     }
     function numeroPrincipal(feature) {
+      const cuadra = detalleCuadra(feature);
+      if (cuadra) return cuadra.territorio;
       const coincidencia = nombre(feature).match(/Territorio\s+(\d+)/i);
       return coincidencia ? coincidencia[1] : '';
     }
@@ -112,16 +120,20 @@
       const coincidencia = nombre(feature).match(/Territorio\s+(\d+)/i);
       const colores = ['#f4bf24','#ef7e3b','#56bddb','#8d62a9','#86c33c','#3554a4','#e765a5'];
       const color = colores[coincidencia ? (Number(coincidencia[1]) - 1) % colores.length : 0];
-      return { color, weight:1.5, fillColor:color, fillOpacity:.44 };
+      const esCuadraUno = Boolean(detalleCuadra(feature));
+      return { color, weight:esCuadraUno ? 2.2 : 1.5, fillColor:color, fillOpacity:esCuadraUno ? .52 : .44, lineJoin:'round' };
     }
     function prepararSector(feature, layer) {
       const etiqueta = nombre(feature);
-      layer.bindTooltip(etiqueta, { sticky:true });
-      layer.bindPopup('<b>' + etiqueta.replace(/</g,'&lt;') + '</b><br>Polígono importado del My Maps del territorio.');
+      const cuadra = detalleCuadra(feature);
+      const titulo = cuadra ? 'Territorio ' + cuadra.territorio + ' · cuadra ' + cuadra.letra : etiqueta;
+      layer.bindTooltip(titulo, { sticky:true });
+      layer.bindPopup('<b>' + titulo.replace(/</g,'&lt;') + '</b><br>' + (cuadra ? 'Límite conservado de la cuadra trazada en My Maps.' : 'Polígono importado del My Maps del territorio.'));
+      if (cuadra) layer.on({ mouseover:() => layer.setStyle({ weight:3, fillOpacity:.64 }), mouseout:() => sectores.resetStyle(layer) });
       const codigo = codigoTerritorio(feature);
       if (!codigo) return;
       const centro = layer.getBounds().getCenter();
-      etiquetasDetalle.push({ marcador:crearEtiqueta(centro, codigo, /\s[A-C]$/.test(codigo) ? 'cuadra' : ''), codigo, principal:numeroPrincipal(feature), centro });
+      etiquetasDetalle.push({ marcador:crearEtiqueta(centro, codigo, /(?:\s[A-C]|-[A-Z])$/.test(codigo) ? 'cuadra' : ''), codigo, principal:numeroPrincipal(feature), centro });
     }
     function cruzan(a, b) { return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top; }
     function actualizarEtiquetas() {
@@ -186,7 +198,8 @@
       } else { marcadorUsuario.setLatLng(punto); circuloPrecision.setLatLng(punto).setRadius(accuracy); }
       if (seguir) mapa.setView(punto, Math.max(mapa.getZoom(), 16), { animate:true });
       const territorio = territorioDe(punto);
-      statusTitle.textContent = territorio ? 'Estás en ' + nombre(territorio) : datosListos ? 'Estás fuera de un polígono marcado' : 'Ubicación GPS activa';
+      const cuadra = territorio && detalleCuadra(territorio);
+      statusTitle.textContent = territorio ? (cuadra ? 'Estás en Territorio ' + cuadra.territorio + ' · cuadra ' + cuadra.letra : 'Estás en ' + nombre(territorio)) : datosListos ? 'Estás fuera de un polígono marcado' : 'Ubicación GPS activa';
       statusText.textContent = territorio ? 'Precisión aproximada ' + Math.round(accuracy) + ' m. Verifica la cuadra visualmente si estás cerca de un límite.' : 'Coordenadas: ' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '.';
       precision.textContent = '± ' + Math.round(accuracy) + ' m';
       follow.disabled = false;
@@ -213,6 +226,14 @@
         const xml = new DOMParser().parseFromString(texto, 'text/xml');
         const datos = toGeoJSON.kml(xml);
         datos.features = datos.features.filter(f => ['Polygon','MultiPolygon'].includes(f.geometry && f.geometry.type));
+        let letra = 0;
+        datos.features.forEach(feature => {
+          if (/^Territorio\s+1$/i.test(nombre(feature))) {
+            const codigo = String.fromCharCode(65 + letra++);
+            feature.properties.name = 'Territorio 1 — 1-' + codigo;
+            feature.properties.cuadra = '1-' + codigo;
+          }
+        });
         sectores.addData(datos);
         if (sectores.getLayers().length) mapa.fitBounds(sectores.getBounds(), { padding:[18,18] });
         datosListos = true;
