@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#254d9b">
+  <title>Territorio Moderna | GPS</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root { --azul:#254d9b; --morado:#6d4f93; --verde:#8ccf16; --fondo:#f5f7fc; --texto:#172036; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--texto); font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--fondo); }
+    header { padding:calc(14px + env(safe-area-inset-top)) 16px 14px; background:var(--azul); color:white; }
+    h1 { font-size:18px; margin:0; font-weight:750; letter-spacing:.1px; }
+    header p { margin:3px 0 0; font-size:13px; opacity:.9; }
+    #map { height:calc(100dvh - 116px); min-height:470px; width:100%; }
+    .map-action { border:0; border-radius:10px; background:white; color:var(--azul); box-shadow:0 2px 9px #0003; cursor:pointer; font:700 14px system-ui,sans-serif; padding:10px 12px; }
+    .map-action.active { background:var(--morado); color:white; }
+    .leaflet-top .leaflet-control { margin-top:12px; }
+    .leaflet-control-layers { border:0!important; border-radius:10px!important; overflow:hidden; }
+    .status { position:absolute; z-index:1000; left:12px; right:12px; bottom:calc(12px + env(safe-area-inset-bottom)); background:white; border-radius:14px; box-shadow:0 5px 18px #10204c33; padding:12px 14px; }
+    .status-top { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+    .status h2 { font-size:15px; margin:0; }
+    .chip { padding:3px 8px; border-radius:999px; background:#e9edf8; color:#33446e; font-size:12px; font-weight:700; white-space:nowrap; }
+    .status p { margin:5px 0 0; font-size:13px; line-height:1.32; }
+    .warning { color:#745300; }
+    .tools { display:flex; flex-wrap:wrap; gap:7px; padding:10px 12px; border-top:1px solid #e5e8f1; background:white; }
+    .tools button { border:1px solid #cbd3e7; background:white; color:#273c71; border-radius:8px; padding:8px 10px; cursor:pointer; font:600 13px system-ui,sans-serif; }
+    .tools button.primary { background:var(--azul); color:white; border-color:var(--azul); }
+    .tools button:disabled { opacity:.5; cursor:not-allowed; }
+    .map-link { border:1px solid #cbd3e7; background:white; color:#273c71; border-radius:8px; padding:8px 10px; font:600 13px system-ui,sans-serif; text-decoration:none; }
+    .legend { background:white; padding:9px 10px; border-radius:10px; box-shadow:0 2px 9px #0003; font-size:12px; line-height:1.55; }
+    .legend i { display:inline-block; width:10px; height:10px; margin-right:5px; vertical-align:middle; border-radius:2px; }
+    .leaflet-popup-content { font:14px system-ui,sans-serif; }
+    @media (min-width:700px) { #map { height:calc(100dvh - 113px); } .status { max-width:430px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Territorio Congregación Moderna</h1>
+    <p>Ciudad Juárez, Chihuahua · ubicación GPS en tiempo real</p>
+  </header>
+  <main>
+    <div id="map" aria-label="Mapa del territorio"></div>
+    <section class="status" aria-live="polite">
+      <div class="status-top"><h2 id="status-title">Ubicación no iniciada</h2><span class="chip" id="precision">GPS</span></div>
+      <p id="status-text">Toca “Mi ubicación” y acepta el permiso del navegador.</p>
+    </section>
+    <div class="tools">
+      <button class="primary" id="locate" type="button">Mi ubicación</button>
+      <button id="follow" type="button" disabled>Seguirme</button>
+      <a class="map-link" href="https://www.google.com/maps/d/viewer?mid=1yc3FGzaB7sCwkCxFOhHmPw-kCii_8XY" target="_blank" rel="noopener">Ver My Maps</a>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/@tmcw/togeojson@6.0.0/dist/togeojson.umd.js"></script>
+  <script>
+    // Los polígonos vienen de la exportación del My Maps proporcionado por el usuario.
+    const mapa = L.map('map', { zoomControl:false }).setView([31.65195495729244, -106.46580061039361], 16);
+    L.control.zoom({ position:'topright' }).addTo(mapa);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom:19, attribution:'© OpenStreetMap contributors'
+    }).addTo(mapa);
+
+    const sectores = L.geoJSON(null, { style: estiloSector, onEachFeature: prepararSector }).addTo(mapa);
+
+    const leyenda = L.control({ position:'topleft' });
+    leyenda.onAdd = () => {
+      const div = L.DomUtil.create('div','legend');
+      div.innerHTML = '<b>Capas</b><br><i style="background:#6d4f93"></i>Territorios y cuadras My Maps<br><i style="background:#1677ff;border-radius:50%"></i>Tu ubicación GPS';
+      return div;
+    };
+    leyenda.addTo(mapa);
+
+    let marcadorUsuario, circuloPrecision, idSeguimiento, seguir = true;
+    let datosListos = false;
+    const locate = document.getElementById('locate');
+    const follow = document.getElementById('follow');
+    const statusTitle = document.getElementById('status-title');
+    const statusText = document.getElementById('status-text');
+    const precision = document.getElementById('precision');
+
+    function nombre(feature) { return feature.properties.name || feature.properties.Name || 'Territorio sin nombre'; }
+    function estiloSector(feature) {
+      const coincidencia = nombre(feature).match(/Territorio\s+(\d+)/i);
+      const colores = ['#f4bf24','#ef7e3b','#56bddb','#8d62a9','#86c33c','#3554a4','#e765a5'];
+      const color = colores[coincidencia ? (Number(coincidencia[1]) - 1) % colores.length : 0];
+      return { color, weight:1.5, fillColor:color, fillOpacity:.44 };
+    }
+    function prepararSector(feature, layer) {
+      const etiqueta = nombre(feature);
+      layer.bindTooltip(etiqueta, { sticky:true });
+      layer.bindPopup('<b>' + etiqueta.replace(/</g,'&lt;') + '</b><br>Polígono importado del My Maps del territorio.');
+    }
+    function puntoEnAnillo(lng, lat, anillo) {
+      let dentro = false;
+      for (let i=0, j=anillo.length-1; i<anillo.length; j=i++) {
+        const [xi, yi] = anillo[i], [xj, yj] = anillo[j];
+        if (((yi > lat) !== (yj > lat)) && (lng < (xj-xi)*(lat-yi)/(yj-yi)+xi)) dentro = !dentro;
+      }
+      return dentro;
+    }
+    function contiene(feature, latlng) {
+      const c = feature.geometry.coordinates, punto = [latlng.lng, latlng.lat];
+      const poligonos = feature.geometry.type === 'Polygon' ? [c] : feature.geometry.type === 'MultiPolygon' ? c : [];
+      return poligonos.some(p => puntoEnAnillo(punto[0], punto[1], p[0]) && !p.slice(1).some(hueco => puntoEnAnillo(punto[0], punto[1], hueco)));
+    }
+    function territorioDe(latlng) {
+      let mejor = null;
+      sectores.eachLayer(layer => {
+        const feature = layer.feature;
+        if (!feature || !contiene(feature, latlng)) return;
+        // Se prioriza una cuadra sobre el territorio general cuando ambos se traslapan.
+        if (!mejor || /Cuadra/i.test(nombre(feature))) mejor = feature;
+      });
+      return mejor;
+    }
+
+    function actualizarUbicacion(posicion) {
+      const { latitude:lat, longitude:lng, accuracy } = posicion.coords;
+      const punto = L.latLng(lat,lng);
+      if (!marcadorUsuario) {
+        marcadorUsuario = L.circleMarker(punto, { radius:9, color:'#fff', weight:3, fillColor:'#1677ff', fillOpacity:1 }).addTo(mapa).bindPopup('<b>Tu ubicación actual</b>');
+        circuloPrecision = L.circle(punto, { radius:accuracy, color:'#1677ff', weight:1, fillColor:'#1677ff', fillOpacity:.12 }).addTo(mapa);
+      } else { marcadorUsuario.setLatLng(punto); circuloPrecision.setLatLng(punto).setRadius(accuracy); }
+      if (seguir) mapa.setView(punto, Math.max(mapa.getZoom(), 16), { animate:true });
+      const territorio = territorioDe(punto);
+      statusTitle.textContent = territorio ? 'Estás en ' + nombre(territorio) : datosListos ? 'Estás fuera de un polígono marcado' : 'Ubicación GPS activa';
+      statusText.textContent = territorio ? 'Precisión aproximada ' + Math.round(accuracy) + ' m. Verifica la cuadra visualmente si estás cerca de un límite.' : 'Coordenadas: ' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '.';
+      precision.textContent = '± ' + Math.round(accuracy) + ' m';
+      follow.disabled = false;
+      follow.textContent = seguir ? 'Siguiéndome' : 'Seguirme';
+    }
+
+    function errorGps(error) {
+      statusTitle.textContent = 'No se pudo obtener tu ubicación';
+      statusText.textContent = error.code === 1 ? 'Activa el permiso de ubicación para este sitio.' : 'Revisa tu señal GPS e inténtalo otra vez.';
+      statusText.className = 'warning';
+    }
+
+    locate.addEventListener('click', () => {
+      if (!navigator.geolocation) { errorGps({ code:0 }); return; }
+      seguir = true;
+      if (idSeguimiento) navigator.geolocation.clearWatch(idSeguimiento);
+      idSeguimiento = navigator.geolocation.watchPosition(actualizarUbicacion, errorGps, { enableHighAccuracy:true, maximumAge:5000, timeout:15000 });
+      locate.textContent = 'GPS activado'; locate.disabled = true;
+    });
+    follow.addEventListener('click', () => { seguir = !seguir; follow.textContent = seguir ? 'Siguiéndome' : 'Seguirme'; if (seguir && marcadorUsuario) mapa.panTo(marcadorUsuario.getLatLng()); });
+    fetch('territorio-moderna.kml')
+      .then(respuesta => { if (!respuesta.ok) throw new Error('No se pudo cargar el KML'); return respuesta.text(); })
+      .then(texto => {
+        const xml = new DOMParser().parseFromString(texto, 'text/xml');
+        const datos = toGeoJSON.kml(xml);
+        datos.features = datos.features.filter(f => ['Polygon','MultiPolygon'].includes(f.geometry && f.geometry.type));
+        sectores.addData(datos);
+        if (sectores.getLayers().length) mapa.fitBounds(sectores.getBounds(), { padding:[18,18] });
+        datosListos = true;
+        statusTitle.textContent = 'Territorios 1–30 cargados';
+        statusText.textContent = 'Activa “Mi ubicación” para saber en qué territorio o cuadra estás. Los territorios 31–48 siguen pendientes de digitalizar.';
+      })
+      .catch(() => { statusTitle.textContent = 'No se pudieron cargar los territorios'; statusText.textContent = 'Abre este archivo desde un servidor web y vuelve a intentarlo.'; });
+  </script>
+</body>
+</html>
