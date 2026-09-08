@@ -120,8 +120,10 @@
       const coincidencia = nombre(feature).match(/Territorio\s+(\d+)/i);
       const colores = ['#f4bf24','#ef7e3b','#56bddb','#8d62a9','#86c33c','#3554a4','#e765a5'];
       const color = colores[coincidencia ? (Number(coincidencia[1]) - 1) % colores.length : 0];
-      const esCuadraUno = Boolean(detalleCuadra(feature));
-      return { color, weight:esCuadraUno ? 2.2 : 1.5, fillColor:color, fillOpacity:esCuadraUno ? .52 : .44, lineJoin:'round' };
+      const cuadra = detalleCuadra(feature);
+      const esPiloto = cuadra && cuadra.territorio === '1' && ['A','B','C'].includes(cuadra.letra);
+      const esCuadraUno = Boolean(cuadra);
+      return { color, weight:esPiloto ? 3 : esCuadraUno ? 1.7 : 1.5, fillColor:color, fillOpacity:esPiloto ? .58 : esCuadraUno ? .36 : .44, lineJoin:'round' };
     }
     function prepararSector(feature, layer) {
       const etiqueta = nombre(feature);
@@ -132,6 +134,7 @@
       if (cuadra) layer.on({ mouseover:() => layer.setStyle({ weight:3, fillOpacity:.64 }), mouseout:() => sectores.resetStyle(layer) });
       const codigo = codigoTerritorio(feature);
       if (!codigo) return;
+      if (cuadra && cuadra.territorio === '1' && !['A','B','C'].includes(cuadra.letra)) return;
       const centro = layer.getBounds().getCenter();
       etiquetasDetalle.push({ marcador:crearEtiqueta(centro, codigo, /(?:\s[A-C]|-[A-Z])$/.test(codigo) ? 'cuadra' : ''), codigo, principal:numeroPrincipal(feature), centro });
     }
@@ -235,12 +238,18 @@
           }
         });
         sectores.addData(datos);
-        if (sectores.getLayers().length) mapa.fitBounds(sectores.getBounds(), { padding:[18,18] });
+        const piloto = L.latLngBounds();
+        sectores.eachLayer(layer => {
+          const cuadra = detalleCuadra(layer.feature);
+          if (cuadra && cuadra.territorio === '1' && ['A','B','C'].includes(cuadra.letra)) piloto.extend(layer.getBounds());
+        });
+        if (piloto.isValid()) mapa.fitBounds(piloto.pad(.55), { padding:[18,18] });
+        else if (sectores.getLayers().length) mapa.fitBounds(sectores.getBounds(), { padding:[18,18] });
         datosListos = true;
         prepararEtiquetasResumen();
         actualizarEtiquetas();
-        statusTitle.textContent = 'Territorios 1–30 cargados';
-        statusText.textContent = 'Activa “Mi ubicación” para saber en qué territorio o cuadra estás. Los territorios 31–48 siguen pendientes de digitalizar.';
+        statusTitle.textContent = 'Prueba visual: Territorio 1';
+        statusText.textContent = 'Revisa 1-A, 1-B y 1-C sobre las calles. Activa “Mi ubicación” para identificar tu territorio.';
       })
       .catch(() => { statusTitle.textContent = 'No se pudieron cargar los territorios'; statusText.textContent = 'Abre este archivo desde un servidor web y vuelve a intentarlo.'; });
     mapa.on('zoomend moveend', actualizarEtiquetas);
