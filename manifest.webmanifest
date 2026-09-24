@@ -1,0 +1,13 @@
+{
+  "name": "Territorios · Congregación Moderna",
+  "short_name": "Territorios",
+  "description": "Mapa de territorios con GPS, cuadras y lugares.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#254d9b",
+  "icons": [
+    {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}
