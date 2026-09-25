@@ -143,7 +143,8 @@
     function abrirRuta(){
       const destino=destinoSeleccionado();
       if(!destino){estado.textContent='El territorio aún está cargando';detalle.textContent='Espera a que termine de cargar el mapa y vuelve a intentarlo.';return}
-      const lanzar=posicion=>{const parametros=new URLSearchParams({api:'1',destination:`${destino[1]},${destino[0]}`,travelmode:'driving'});if(posicion){ultimaUbicacion=posicion;parametros.set('origin',`${posicion.coords.latitude},${posicion.coords.longitude}`)}window.open(`https://www.google.com/maps/dir/?${parametros}`,'_blank');estado.textContent='Ruta abierta';detalle.textContent='Google Maps te mostrará cómo llegar al territorio seleccionado.'};
+      const ventana=window.open('about:blank','_blank');
+      const lanzar=posicion=>{const parametros=new URLSearchParams({api:'1',destination:`${destino[1]},${destino[0]}`,travelmode:'driving'});if(posicion){ultimaUbicacion=posicion;parametros.set('origin',`${posicion.coords.latitude},${posicion.coords.longitude}`)}const url=`https://www.google.com/maps/dir/?${parametros}`;if(ventana&&!ventana.closed)ventana.location.href=url;else window.location.href=url;estado.textContent='Ruta abierta';detalle.textContent='Google Maps te mostrará cómo llegar al territorio seleccionado.'};
       if(ultimaUbicacion){lanzar(ultimaUbicacion);return}
       if(!navigator.geolocation){lanzar(null);return}
       estado.textContent='Obteniendo tu ubicación para la ruta…';navigator.geolocation.getCurrentPosition(lanzar,()=>lanzar(null),{enableHighAccuracy:true,maximumAge:10000,timeout:15000})
