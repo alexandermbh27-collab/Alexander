@@ -1,4 +1,4 @@
-const VERSION='moderna-pwa-v5';
+const VERSION='moderna-pwa-v6';
 const ARCHIVOS=['./','./index.html','./manifest.webmanifest','./icon.svg','./ajustes-iniciales.json','./territorio-moderna.kml'];
 self.addEventListener('install',evento=>evento.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(ARCHIVOS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',evento=>evento.waitUntil(caches.keys().then(llaves=>Promise.all(llaves.filter(llave=>llave!==VERSION).map(llave=>caches.delete(llave)))).then(()=>self.clients.claim())));
