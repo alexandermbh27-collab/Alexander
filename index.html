@@ -73,6 +73,9 @@
     // a su referencia correcta de My Maps. Los ajustes anteriores quedan
     // guardados en el navegador, sin tocar los demás territorios.
     const vacio=()=>({type:'FeatureCollection',features:[]}),nombre=f=>f.properties.name||f.properties.Name||'',cerrar=a=>[...a,a[0]],llave=n=>`moderna-territorio-${n}-reconstruido-v${n===16||n===21?3:n===28?4:[13,27].includes(n)?2:1}`,llaveCasas='moderna-casitas-v1',llaveTerritoriosNuevos='moderna-territorios-personales-v1',llaveAjustesIniciales='moderna-ajustes-iniciales-v1',ancho=()=>0.35;
+    // Restauración puntual: elimina únicamente los ajustes locales del Territorio 19.
+    // Se activa con ?restaurar19=1 y deja intactos los demás territorios y lugares.
+    if(new URLSearchParams(location.search).has('restaurar19'))localStorage.removeItem(llave(19));
     const btnEliminar=document.querySelector('#eliminar');
     let estados={},barreras=vacio(),barrerasPorTerritorio=new Map(),puntosPemex=vacio(),casas=[],territoriosNuevos=[],marcadoresCasas=[],zonas=[],modo='espera',editando=null,borrador=null,marcadores=[],seleccionVertices=[],moverLibre=false,solicitudInstalacion=null,watchUbicacion=null,primeraUbicacion=true,ultimaUbicacion=null;
     function actualizarSelectorTerritorios(){
