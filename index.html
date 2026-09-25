@@ -376,7 +376,7 @@
       const nuevo=Number(numeroRenombrar.value),letra=letraRenombrar.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3);
       if(!Number.isInteger(nuevo)||nuevo<31||!letra){estado.textContent='Nombre inválido';detalle.textContent='Usa un número de territorio desde 31 y una letra de manzana.';return}
       territoriosNuevos=territoriosNuevos.map(f=>f.properties.id===editando.id?{...f,properties:{...f.properties,territorio:nuevo,etiqueta:`${nuevo}${letra}`}}:f);
-      editando.n=nuevo;guardarTerritoriosNuevos();actualizarSelectorTerritorios();selector.value=`nuevo:${editando.id}`;datosRenombrar.hidden=true;actualizar();
+      editando.n=nuevo;guardarTerritoriosNuevos();actualizarSelectorTerritorios();selector.value=`territorio-nuevo:${editando.n}`;datosRenombrar.hidden=true;actualizar();
       estado.textContent=`Cuadra renombrada a ${nuevo}${letra}`;detalle.textContent='Solo cambió esta cuadra; las demás permanecen exactamente igual.'
     }
     btnRenombrarTerritorio.onclick=abrirRenombrar;btnAplicarRenombre.onclick=aplicarRenombre;
